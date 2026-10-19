@@ -1,0 +1,20 @@
+[project]
+name = "pydantic-ai-learning-skills"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "German Montenegro", email = "gnm3000@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic-ai>=2.57.0",
+    "pydantic-ai-harness[skills]>=0.57.0",
+]
+
+[project.scripts]
+pydantic-ai-learning-skills = "pydantic_ai_learning_skills:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
