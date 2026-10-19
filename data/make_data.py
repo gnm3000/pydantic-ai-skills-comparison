@@ -39,9 +39,25 @@ for r in random.sample(rows, 3):
     r["product"] = ""  # missing values
 random.shuffle(rows)
 
+# Deterministic traps (no randomness, so the rest of the file is unchanged).
+seen: dict[str, dict] = {}
+for r in rows:
+    prev = seen.get(r["order_id"])
+    if prev and prev["product"] and r["product"] and r["status"] != "cancelled":
+        r["amount"] = "$1,111.11"  # duplicate whose copies disagree on the amount: the later row wins
+        break
+    seen[r["order_id"]] = r
+counts = {r["order_id"]: 0 for r in rows}
+for r in rows:
+    counts[r["order_id"]] += 1
+outliers = ["$9,450.00", "7.800,00 EUR"]  # amounts far above their product's median
+for r in rows:
+    if outliers and r["status"] == "completed" and counts[r["order_id"]] == 1 and r["amount"] != "$1,111.11":
+        r["amount"] = outliers.pop(0)
+
 out = Path(__file__).parent / "sales_raw.csv"
 with out.open("w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=list(rows[0]))
     w.writeheader()
     w.writerows(rows)
-print(f"{len(rows)} filas -> {out}")
+print(f"{len(rows)} rows -> {out}")

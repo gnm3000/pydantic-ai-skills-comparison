@@ -1,0 +1,67 @@
+order_id,date,region,product,amount,status
+ORD-0004,21/01/2025,north america,Widget,509.87 USD,completed
+ORD-0046,07/09/2025,europe,Gadget,"$9,450.00",completed
+ORD-0050,2025-09-27,north america,Widget,"7.800,00 EUR",completed
+ORD-0030,2025-06-11,asia-pacific,Gizmo,$860.40,completed
+ORD-0015,2025-03-20,latin america,Doohickey,90.91 USD,refunded
+ORD-0057,06/11/2025,NA,Widget,"665,11 EUR",refunded
+ORD-0034,2025-07-03,EMEA,Gadget,$539.91,cancelled
+ORD-0007,2025-02-08,latam,Thingamajig,396.28 USD,cancelled
+ORD-0009,18/02/2025,latin america,Doohickey,$273.39,refunded
+ORD-0028,01/06/2025,Emea ,Gadget,$729.35,completed
+ORD-0049,22/09/2025,latam,Widget,EUR 358.22,refunded
+ORD-0042,2025-08-15,usa,Gizmo,"559,02 EUR",completed
+ORD-0032,21/06/2025,NA,,708.43 USD,completed
+ORD-0048,2025-09-17,asia-pacific,Widget,655.49 USD,refunded
+ORD-0045,2025-09-02,Emea ,Gizmo,709.86 USD,completed
+ORD-0051,04/10/2025,europe,Gizmo,EUR 377.23,completed
+ORD-0039,2025-07-28,north america,Gadget,"144,57 EUR",refunded
+ORD-0004,21/01/2025,north america,Widget,"$1,111.11",completed
+ORD-0060,21/11/2025,APAC,Gadget,EUR 32.54,completed
+ORD-0005,2025-01-26,N. America,Thingamajig,$738.19,cancelled
+ORD-0035,08/07/2025,APAC,Thingamajig,$502.49,completed
+ORD-0043,20/08/2025,latam,Gadget,$635.31,completed
+ORD-0052,2025-10-09,APAC,Gadget,394.28 USD,completed
+ORD-0008,13/02/2025,asia-pacific,Gadget,"719,05 EUR",completed
+ORD-0054,19/10/2025,N. America,Thingamajig,$387.63,completed
+ORD-0027,24/05/2025,N. America,Thingamajig,342.70 USD,completed
+ORD-0025,2025-05-14,apac,Gizmo,"441,19 EUR",refunded
+ORD-0037,2025-07-18,asia-pacific,,$388.73,completed
+ORD-0040,2025-08-05,apac,Thingamajig,$487.04,refunded
+ORD-0002,2025-01-11,EMEA,Widget,$401.61,completed
+ORD-0019,12/04/2025,Emea ,Thingamajig,"856,20 EUR",completed
+ORD-0026,2025-05-19,Emea ,Gizmo,"149,01 EUR",refunded
+ORD-0010,23/02/2025,europe,Gadget,$841.28,completed
+ORD-0055,2025-10-24,north america,Gizmo,64.33 USD,completed
+ORD-0058,11/11/2025,europe,Widget,EUR 599.32,completed
+ORD-0044,2025-08-25,LATAM,Doohickey,$409.06,completed
+ORD-0047,2025-09-12,EMEA,Doohickey,894.78 USD,completed
+ORD-0041,2025-08-10,EMEA,Gizmo,57.14 USD,refunded
+ORD-0053,2025-10-14,APAC,Thingamajig,773.48 USD,completed
+ORD-0013,10/03/2025,apac,Doohickey,$800.60,completed
+ORD-0033,26/06/2025,APAC,Doohickey,"427,58 EUR",completed
+ORD-0011,28/02/2025,apac,Gizmo,EUR 543.05,completed
+ORD-0031,2025-06-16,europe,Gadget,$317.21,completed
+ORD-0054,19/10/2025,N. America,,$387.63,completed
+ORD-0025,2025-05-14,apac,Gizmo,"441,19 EUR",refunded
+ORD-0056,2025-11-01,asia-pacific,Thingamajig,611.50 USD,completed
+ORD-0043,20/08/2025,latam,Gadget,$635.31,completed
+ORD-0006,2025-02-03,APAC,Thingamajig,"646,66 EUR",cancelled
+ORD-0023,2025-05-04,LATAM,Gizmo,EUR 860.81,completed
+ORD-0014,15/03/2025,Emea ,Widget,454.45 USD,completed
+ORD-0020,17/04/2025,latin america,Doohickey,EUR 111.11,completed
+ORD-0003,16/01/2025,NA,Gadget,"574,95 EUR",cancelled
+ORD-0016,25/03/2025,europe,Thingamajig,265.01 USD,completed
+ORD-0021,2025-04-22,north america,Doohickey,$162.83,completed
+ORD-0036,2025-07-13,LATAM,Gadget,44.63 USD,refunded
+ORD-0022,2025-04-27,Emea ,Widget,"855,07 EUR",completed
+ORD-0024,2025-05-09,usa,Doohickey,$442.75,completed
+ORD-0017,2025-04-02,EMEA,Gadget,"153,14 EUR",completed
+ORD-0001,06/01/2025,europe,Widget,"83,74 EUR",completed
+ORD-0029,06/06/2025,apac,Widget,890.85 USD,completed
+ORD-0018,07/04/2025,europe,Gizmo,23.60 USD,cancelled
+ORD-0011,28/02/2025,apac,Gizmo,EUR 543.05,completed
+ORD-0012,2025-03-05,asia-pacific,Widget,EUR 73.39,cancelled
+ORD-0059,16/11/2025,apac,Gadget,$884.55,completed
+ORD-0006,2025-02-03,APAC,Thingamajig,"646,66 EUR",cancelled
+ORD-0038,23/07/2025,latam,Gadget,"488,01 EUR",completed

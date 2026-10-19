@@ -7,8 +7,8 @@ Three agents solve the same task (clean a messy sales CSV and write a report), e
 | Agent | Skills | Status |
 |---|---|---|
 | `agent_1_no_skill` | none (baseline) | done |
-| `agent_2_basic_skills` | two simple skills | planned |
-| `agent_3_advanced_skill` | one advanced skill + `Planning` | planned |
+| `agent_2_basic_skills` | three knowledge skills (rules, policies, report format) | done |
+| `agent_3_advanced_skill` | one advanced skill (staged workflow, references, validation gates) + persistent `Planning` | written, not run yet |
 
 ## Setup
 
@@ -18,6 +18,8 @@ echo "OPENROUTER_API_KEY=..." > .env
 uv run python data/make_data.py            # regenerate data/sales_raw.csv (optional)
 uv run python -m agent_1_no_skill.main     # run an agent
 uv run python grader.py grade agent_1_no_skill
+uv run python bench.py run agent_2_basic_skills --runs 2   # max 2 runs per call
+uv run python bench.py resume agent_3_advanced_skill --after 14
 ```
 
 Model: `openrouter:deepseek/deepseek-v4.1-flash` (set in `common.py`).
@@ -61,3 +63,29 @@ These gaps are what the skills in agents 2 and 3 are meant to close.
 uv run python grader.py grade agent_1_no_skill
 uv run python grader.py grade-all
 ```
+
+## The task: monthly sales close (6 stages)
+
+Same prompt for every agent. Inputs in `data/`: `sales_raw.csv`, `fx_rates.csv` (monthly EUR to USD), `refunds_ledger.csv`, `targets.csv`. Outputs in `out/`: `clean.csv`, `exceptions.csv`, `anomalies.csv`, `review_queue.csv`, `monthly.csv`, `report.md` (with an executive summary).
+
+Stages: profile inputs, clean, reconcile refunds, anomalies and review queue, monthly revenue vs targets, report. Planted traps: a month without an FX rate, ledger/sales refund mismatches, a duplicate whose copies disagree on the amount, two outlier amounts, and eight conditional review rules.
+
+## Results so far
+
+| Round | Task | Agent 1 | Agent 2 | Finding |
+|---|---|---|---|---|
+| 1 | clean one CSV (13 checks) | 1/13 | 13/13 | Skills carry business knowledge the model cannot guess. |
+| 2 | 5 outputs, 23 checks | 1/23 | 23/23 (2 of 2 runs) | Knowledge skills alone were enough; the task was too easy for agent 3 to add anything. |
+
+Round 2 cost per agent-2 run: about 390k to 470k input tokens, 15k to 22k output tokens, 22 to 23 requests.
+
+## Round 3: what agent 3 is meant to show
+
+The task now has a sixth output (`review_queue.csv`, 8 rules), which makes the rule set long. Agent 2 keeps all rules in flat skills. Agent 3 has one skill whose `SKILL.md` is only the workflow, and the rules are split into `references/` that it loads per stage (progressive disclosure).
+
+- **Staged workflow:** it writes the 6-step plan with `write_plan`, runs one stage at a time and may not advance until `scripts/validate.py <stage>` passes.
+- **Validation gates:** the validators check schemas, allowed values and cross-file totals, and recompute the rules that can be derived from `clean.csv`. They do not read the grader and do not contain the EUR rates. They do act as a second opinion on the rules, which is part of what a skill with scripts offers.
+- **Same knowledge as agent 2:** the reference files were generated from agent 2's skills, so the rules are identical; only the process differs.
+- **Crash and resume:** the plan is stored in SQLite (`SqlitePlanStore`). `bench.py resume` stops a run after N model requests and starts a new process on the same workspace with a "continue" prompt. The new process sees the stored plan on its first request.
+
+Tests run without a model: validators pass on a perfect solution and flag planted errors, the grader scores that solution 25/25, and the plan survives a second process.

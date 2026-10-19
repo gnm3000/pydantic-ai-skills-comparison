@@ -12,4 +12,4 @@ agent = Agent(
 )
 
 if __name__ == "__main__":
-    run(agent)
+    run(agent, ws)

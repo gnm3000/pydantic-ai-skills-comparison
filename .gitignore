@@ -7,7 +7,7 @@ wheels/
 *.egg-info
 .pytest_cache/
 .ruff_cache/
-*.csv
+
 # Entorno virtual
 .venv/
 
@@ -16,9 +16,16 @@ wheels/
 .env.*
 !.env.example
 
-# Salidas de las corridas de los agentes (se regeneran; data/sales_raw.csv SÍ se versiona)
+# Salidas de las corridas (se regeneran)
 workspace/
-runs/
+results/
+plan.db
+
+# CSV generados: se ignoran, salvo los datos de entrada de data/, que sí se versionan
+# (se pueden regenerar con data/make_data.py y data/make_extra_data.py, pero el calificador
+# depende de los datos exactos)
+*.csv
+!data/*.csv
 
 # Editor / SO
 .vscode/
