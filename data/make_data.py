@@ -1,4 +1,4 @@
-"""Genera data/sales_raw.csv con datos sucios (formatos mixtos, duplicados, faltantes)."""
+"""Generate data/sales_raw.csv with messy data (mixed formats, duplicates, missing values)."""
 import csv
 import random
 from pathlib import Path
@@ -34,9 +34,9 @@ rows = [{
     "amount": amount(random.uniform(20, 900), random.choice(["USD", "USD", "EUR"])),
     "status": random.choice(STATUS),
 } for i in range(1, 61)]
-rows += [dict(r) for r in random.sample(rows, 6)]  # duplicados
+rows += [dict(r) for r in random.sample(rows, 6)]  # duplicates
 for r in random.sample(rows, 3):
-    r["product"] = ""  # faltantes
+    r["product"] = ""  # missing values
 random.shuffle(rows)
 
 out = Path(__file__).parent / "sales_raw.csv"

@@ -1,4 +1,4 @@
-"""Calificador CLI: puntúa la salida (out/) de cada agente contra las reglas de negocio correctas.
+"""CLI grader: scores each agent's output (out/) against the correct business rules.
 
     uv run python grader.py grade agent_1_no_skill
     uv run python grader.py grade-all
@@ -20,7 +20,7 @@ REGIONS = {
 }
 COLUMNS = ["order_id", "date", "region", "product", "amount_usd", "status"]
 
-app = typer.Typer(help="Califica a los agentes con las reglas de negocio correctas.", no_args_is_help=True)
+app = typer.Typer(help="Grade the agents against the correct business rules.", no_args_is_help=True)
 
 
 def parse_amount(s: str) -> float:
@@ -39,7 +39,7 @@ def parse_date(s: str) -> str:
 
 
 def expected() -> dict[str, dict]:
-    """Respuesta correcta: sin duplicados (gana la fila con producto), sin cancelados, USD, reembolsos negativos."""
+    """Correct answer: deduplicated (the row with a product wins), no cancelled orders, USD, refunds negative."""
     best: dict[str, dict] = {}
     for r in csv.DictReader((ROOT / "data" / "sales_raw.csv").open()):
         if r["order_id"] not in best or (r["product"] and not best[r["order_id"]]["product"]):
@@ -82,19 +82,19 @@ def run_checks(ws: Path) -> list[tuple[str, bool]]:
     total = round(sum(v["amount_usd"] for v in truth.values()), 2)
 
     checks = [
-        ("clean.csv con las columnas esperadas", bool(rows) and list(rows[0]) == COLUMNS),
-        ("sin duplicados ni cancelados (filas exactas)", len(rows) == len(got) == len(truth) and set(got) == set(truth)),
-        ("fechas ISO correctas (DD/MM/YYYY leído bien)", all(got.get(k, {}).get("date") == v["date"] for k, v in truth.items())),
-        ("regiones canónicas (NA/EMEA/APAC/LATAM)", all(got.get(k, {}).get("region") == v["region"] for k, v in truth.items())),
-        ("producto vacío -> UNKNOWN", all(got.get(k, {}).get("product") == v["product"] for k, v in truth.items())),
+        ("clean.csv has the expected columns", bool(rows) and list(rows[0]) == COLUMNS),
+        ("no duplicates or cancelled orders (exact rows)", len(rows) == len(got) == len(truth) and set(got) == set(truth)),
+        ("correct ISO dates (DD/MM/YYYY read properly)", all(got.get(k, {}).get("date") == v["date"] for k, v in truth.items())),
+        ("canonical regions (NA/EMEA/APAC/LATAM)", all(got.get(k, {}).get("region") == v["region"] for k, v in truth.items())),
+        ("blank product -> UNKNOWN", all(got.get(k, {}).get("product") == v["product"] for k, v in truth.items())),
         ("montos en USD (EUR x1.10, reembolsos negativos)", all(amount_ok(k, v) for k, v in truth.items())),
     ]
-    checks += [(f"report.md: sección '## {s}'", f"## {s}" in report)
+    checks += [(f"report.md: section '## {s}'", f"## {s}" in report)
                for s in ["Summary", "Revenue by region", "Top 3 products", "Data quality log"]]
     checks += [
         (f"report.md: total neto {total:,.2f} USD", has_number(report, total)),
-        ("report.md: total de cada región", all(has_number(report, x) for x in by_region.values())),
-        ("report.md: log menciona duplicados y cancelados", "duplicate" in report.lower() and "cancel" in report.lower()),
+        ("report.md: total for every region", all(has_number(report, x) for x in by_region.values())),
+        ("report.md: log mentions duplicates and cancelled orders", "duplicate" in report.lower() and "cancel" in report.lower()),
     ]
     return checks
 
@@ -110,26 +110,26 @@ def show(name: str, ws: Path) -> tuple[int, int]:
 
 
 @app.command()
-def grade(agent: str = typer.Argument(..., help="Carpeta del agente, p. ej. agent_1_no_skill")):
-    """Califica el workspace/out de un agente."""
+def grade(agent: str = typer.Argument(..., help="Agent folder, e.g. agent_1_no_skill")):
+    """Grade one agent's workspace/out."""
     ws = ROOT / agent / "workspace"
     if not ws.exists():
-        typer.secho(f"No existe {ws}. Corre primero el agente.", fg=typer.colors.RED)
+        typer.secho(f"{ws} does not exist. Run the agent first.", fg=typer.colors.RED)
         raise typer.Exit(1)
     show(agent, ws)
 
 
 @app.command("grade-all")
 def grade_all():
-    """Califica todos los agent_* que ya tengan workspace y muestra un resumen."""
+    """Grade every agent_* that has a workspace and print a summary."""
     results = {}
     for d in sorted(ROOT.glob("agent_*")):
         if (d / "workspace").exists():
             results[d.name] = show(d.name, d / "workspace")
     if not results:
-        typer.secho("Ningún agente tiene workspace todavía.", fg=typer.colors.YELLOW)
+        typer.secho("No agent has a workspace yet.", fg=typer.colors.YELLOW)
         raise typer.Exit(1)
-    typer.secho("\nResumen", bold=True)
+    typer.secho("\nSummary", bold=True)
     for name, (s, n) in results.items():
         typer.echo(f"  {name:<28} {s}/{n}  {'█' * s}{'░' * (n - s)}")
 
