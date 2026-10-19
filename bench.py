@@ -130,7 +130,7 @@ def show():
         avg = lambda k: round(statistics.mean(r.get(k, 0) for r in mine))  # noqa: E731
         typer.echo(f"  {agent:<44} score {avg('score')}/{mine[0]['max_score']}  in {avg('input_tokens')}  "
                    f"out {avg('output_tokens')}  reqs {avg('requests')}  tools {avg('tool_calls')}  ({len(mine)} runs)")
-        missed = {n for r in mine for n in r["failed"]}
+        missed = {n for r in mine for n in r["failed"]} if "[interrupted" not in agent else set()
         if missed:
             typer.echo(f"    failed in at least one run: {'; '.join(sorted(missed))}")
 

@@ -1,91 +1,136 @@
 # pydantic-ai-learning-skills
 
-Learning project: how much do **Agent Skills** improve what a Pydantic AI agent can do?
+How much do **Agent Skills** improve what a Pydantic AI agent can do? Three agents solve the same task with increasing skill support, and a grader that uses no LLM scores every run.
 
-Three agents solve the same task (clean a messy sales CSV and write a report), each with more skill support. A CLI grader scores every run, so the improvement is measured, not guessed.
+Stack: `pydantic-ai` 2.57, `pydantic-ai-harness` 0.57 (`Skills`, `Planning`, `FileSystem`, `Shell`), model `openrouter:deepseek/deepseek-v4.1-flash` (about $0.03 per million input tokens, so a full run costs cents).
 
-| Agent | Skills | Status |
+## TL;DR
+
+- **Knowledge skills are the big win.** Same model, same tools, same prompt: 1/23 without skills, 23/23 and 25/25 with them. The model is not worse at analysis; it cannot guess company conventions (EUR rate by month, what to do with cancelled orders, column names, report sections).
+- **A process skill adds recoverability and an audit trail, not a higher score.** The agent with one workflow skill plus `Planning` follows a 6-stage plan, loads one reference per stage and passes a validation gate before moving on. It scored the same (25/25) at a similar cost as the agent with flat knowledge skills.
+- **Staged work survives a crash.** Cut mid-pipeline, the process-skill agent resumed in a new process from its own plan and files, skipped the finished stages and completed 25/25 using about half the tokens of a fresh run. The single-script agent has no partial progress to resume.
+- **Choose by task.** Short, repeatable task: knowledge skills are enough and simplest. Long or costly task, or one you must audit: add a process skill on top of the knowledge. See [When to choose each](#when-to-choose-each).
+
+## Agents
+
+| Agent | Setup | What it adds |
 |---|---|---|
-| `agent_1_no_skill` | none (baseline) | done |
-| `agent_2_basic_skills` | three knowledge skills (rules, policies, report format) | done |
-| `agent_3_advanced_skill` | one advanced skill (staged workflow, references, validation gates) + persistent `Planning` | written, not run yet |
+| `agent_1_no_skill` | `FileSystem` + `Shell` | nothing; it has to guess every rule |
+| `agent_2_basic_skills` | + `Skills` with 3 flat skills (`sales-cleaning-rules`, `monthly-close-policies`, `report-format`) | knowledge: all rules and schemas, loaded whole |
+| `agent_3_advanced_skill` | + one skill `monthly-close` + `Planning(tools=["write_plan"])` (plan persisted in SQLite, rewritten whole on every update) | knowledge **and** process: short `SKILL.md` with a 6-stage workflow, rules split into `references/` (read per stage), `scripts/validate.py` quality gates |
 
-## Setup
+Agent 3's `references/` were generated from agent 2's skills, so both have **the same rules**; only the process differs.
+
+## The task: monthly sales close
+
+Same prompt for all agents (no rules in it):
+
+> Run the monthly sales close. The inputs are in data/. Write these files to out/: clean.csv, exceptions.csv, anomalies.csv, review_queue.csv, monthly.csv and report.md (the report must include an executive summary).
+
+Inputs in `data/` (versioned; regenerate identically with `data/make_data.py`, then `data/make_extra_data.py`): `sales_raw.csv`, `fx_rates.csv` (EUR to USD per month), `refunds_ledger.csv`, `targets.csv`.
+
+Six stages: profile inputs, clean, reconcile refunds, anomalies and review queue, monthly revenue vs targets, report. Planted traps: a month with no FX rate, ledger/sales refund mismatches, a duplicate whose copies disagree on the amount, two outlier amounts, and eight conditional review rules.
+
+## Results
+
+The task grew over three rounds because every version was solved perfectly by the agent with knowledge skills.
+
+| Round | Task | Agent 1 (no skill) | Agent 2 (knowledge) | Agent 3 (process) |
+|---|---|---|---|---|
+| 1 | clean one CSV, 13 checks | 1/13 | 13/13 | not built |
+| 2 | 5 output files, 23 checks | 1/23 | 23/23 (2 of 2 runs) | not built |
+| 3 | 6 output files, 25 checks | not re-run | 25/25 (3 of 3 runs) | 25/25 (2 of 2 runs) |
+
+### Round 3 cost (`bench.py run`; tokens are model input and output)
+
+| Run | Score | Input tokens | Output tokens | Requests | Tool calls | Seconds |
+|---|---|---|---|---|---|---|
+| Agent 2, run A | 25/25 | 864k | 27k | 32 | 46 | 104 |
+| Agent 2, run B | 25/25 | 627k | 24k | 25 | 40 | 75 |
+| Agent 2, run C | 25/25 | 257k | 14k | 15 | 23 | 48 |
+| **Agent 2, average** | **25/25** | **583k** | **22k** | **24** | **36** | **76** |
+| Agent 3, run A | 25/25 | 454k | 12k | 25 | 39 | 69 |
+| Agent 3, run B | 25/25 | 601k | 17k | 30 | 42 | 62 |
+| **Agent 3, average** | **25/25** | **528k** | **15k** | **28** | **40** | **66** |
+
+The difference between agents 2 and 3 is within noise: agent 2 alone varies 3.4x in input tokens between runs, and each agent has only 2 to 3 runs.
+
+### What agent 1 does without skills
+
+It analyses well and finds most of the same problems (missing April rate, refund mismatches, outliers), but applies its own conventions: drops a conflicting duplicate entirely, imputes the missing rate by interpolation instead of using the previous month, adds `currency` / `fx_rate` columns, invents its own report sections, and reports a different net revenue (38,781.11 vs the expected 36,417.82). The grader measures conformity to the company's rules, not intelligence.
+
+### What agent 3 does with its skill
+
+In both runs the trace shows: `write_plan` with the 6 stages, then per stage: read that stage's reference, write `work/stageN.py`, run it together with `validate.py <stage>`, rewrite the plan with the stage completed. The gates passed on the first try almost every time. In both runs it also read the source of `validate.py` before starting, so it knew the checks in advance.
+
+### Crash and resume
+
+`bench.py resume` stops a run after N model requests (simulated crash), then starts a **new process** on the same workspace with the prompt "a previous run was interrupted, continue and do not redo finished work". No message history is passed. Agent 3's plan lives in SQLite and is shown to the model on its first request; its `work/stageN.py` scripts and `work/notes.json` also stay on disk.
+
+| Phase | Score | Input tokens | Requests | Tool calls | Seconds |
+|---|---|---|---|---|---|
+| Agent 3, cut at 18 requests (stage 4 script written, not run) | 7/25 | 243k | 18 | 28 | 39 |
+| Agent 3, resumed | 25/25 | 247k | 17 | 32 | 59 |
+| Agent 2, cut at 12 requests | 25/25 | 178k | 12 | 24 | 45 |
+| Agent 2, resumed | 25/25 | 336k | 15 | 29 | 107 |
+
+- **Agent 3 resumed correctly.** It listed `work/`, read `notes.json` and `stage4.py`, ran stage 4, validated, wrote and ran stages 5 and 6, and finished 25/25. It did not re-run the scripts of stages 1 to 3. The resumed phase cost 247k tokens, about 47% of a fresh run (528k average). Cut plus resume totalled 490k, about the same as a fresh run: the crash lost no work, it did not make the job cheaper.
+- **Agent 2 could not be tested.** It builds everything with one script, so by request 12 every output already existed and the cut came after the work was done. The resumed run did nothing new: it re-implemented the pipeline from scratch to verify the old outputs, which cost 336k tokens, almost twice what it took to build them (178k). An agent with no record of its progress rebuilds its state from the files and re-checks it. A cut early enough to matter (before the script exists) would leave nothing to resume, so a fair "resume" comparison for a single-script agent is simply a fresh run.
+- **Caveats.** One pair per agent. For agent 3 the plan reminder and the files in `work/` both helped, and this test cannot separate their effects.
+
+## What I learned
+
+1. **Knowledge is what skills are for.** Rules, schemas and conventions the model cannot know move the score from near zero to full.
+2. **A benchmark saturates.** Making the task harder three times still ended at full score for the knowledge skills. A process skill needs a task where self-organising fails: much more data, a rule manual too long to load whole, or interruptions.
+3. **Progressive disclosure is only a token story if the rules are long.** Here the rules fit comfortably in context, so loading them per stage did not save tokens.
+4. **Validation scripts are a second opinion.** They check schemas, allowed values and cross-file totals, and recompute the rules that can be derived from `clean.csv`. They never read the grader and do not contain the FX rates, but they do catch mistakes, which is part of what a skill with scripts offers.
+5. **Check your skills load.** A colon inside a YAML `description` made `Skills` silently skip a skill. Verify the catalog offline: `await Skills("skills").load(LocalWorkspaceBackend(agent_dir))` and look at `.skipped`.
+6. **Costs vary a lot between runs.** Judge agents on several runs, not one.
+7. **Resumability comes from persisted stages, not from the prompt.** Stage scripts, a notes file and a stored plan let a fresh process pick up where the last one died. "Continue and do not redo finished work" alone makes an agent with no such record spend tokens re-verifying.
+
+## When to choose each
+
+Two kinds of skill, two different jobs:
+
+- A **knowledge skill** (agent 2) holds what the model cannot know: rules, schemas, conventions. It is what produces correct output.
+- A **process skill** (agent 3) holds how to do the job: ordered stages, quality gates, a plan, files that persist between stages. It sits on top of the knowledge; it does not replace it. In these runs it did not raise the score or lower the cost. What it added was crash recovery and an audit trail, in exchange for more moving parts.
+
+| Situation | Choose | Why |
+|---|---|---|
+| Short task that can simply be repeated if it fails | Agent 2: knowledge skills | Simplest setup, fewest things to break |
+| Long or costly task you do not want to repeat if it dies | Agent 3: process skill | Progress persists (plan, stage scripts, notes) |
+| You need to audit what it did and in what order | Agent 3: process skill | The plan and a validation gate per stage are visible in the trace |
+| Rules or conventions the model cannot guess | Any agent with knowledge skills | Without them the score stays near zero |
+
+## Limits
+
+One model, two to three runs per agent, and a grader and skills written by the same person, so the skills were written to pass the exam (the point was to have something to measure). Results would change with another model.
+
+## Run it
 
 ```bash
 uv sync
-echo "OPENROUTER_API_KEY=..." > .env
-uv run python data/make_data.py            # regenerate data/sales_raw.csv (optional)
-uv run python -m agent_1_no_skill.main     # run an agent
-uv run python grader.py grade agent_1_no_skill
-uv run python bench.py run agent_2_basic_skills --runs 2   # max 2 runs per call
-uv run python bench.py resume agent_3_advanced_skill --after 14
-```
-
-Model: `openrouter:deepseek/deepseek-v4.1-flash` (set in `common.py`).
-
-## Agent 1: no skills (baseline)
-
-Tools only: `FileSystem` and `Shell` from `pydantic-ai-harness`. No `Skills`, no `Planning`. It has to guess every business rule.
-
-**Input** (`data/sales_raw.csv`, 66 rows): mixed date formats (`ISO` and `DD/MM/YYYY`), mixed amount formats (`$1,234.50`, `509.87 USD`, `509,87 EUR`, `EUR 109.90`), region aliases (`europe`, `N. America`, `apac`), duplicated orders, blank products, and `completed` / `refunded` / `cancelled` statuses.
-
-**Prompt:** `Clean data/sales_raw.csv and produce out/clean.csv and out/report.md with the cleaned sales.`
-
-**Output** (in `agent_1_no_skill/workspace/out/`):
-- `clean.csv`: cleaned rows with ISO dates and deduplicated orders.
-- `report.md`: a long report with its own structure, plus a helper script `clean_sales.py` the agent wrote itself.
-
-**Grader score: 1/13.** Only the date check passes.
-
-### Problems with agent 1
-
-It does a reasonable job, but it does not know our business rules:
-
-1. **No currency conversion.** EUR amounts stay in EUR; the expected rule is EUR → USD at ×1.10.
-2. **Cancelled orders are kept.** They should be excluded.
-3. **Refunds are positive.** They should be negative amounts.
-4. **Non-canonical regions.** It keeps names like `europe` / `north america`; expected `NA`, `EMEA`, `APAC`, `LATAM`.
-5. **Wrong CSV schema.** It adds `currency` and `amount_raw`; expected `order_id, date, region, product, amount_usd, status`.
-6. **Report structure differs.** Missing the required sections `Summary`, `Revenue by region`, `Top 3 products`, `Data quality log`.
-7. **No single USD total.** Totals are split by currency or status instead of one net total plus a total per region.
-8. **Blank products not marked `UNKNOWN`.**
-9. **Non-deterministic.** Tool-call count and output vary between runs (about 18 to 26 calls), so one run is not enough to compare agents.
-10. **Fragile with restricted tools.** Hitting a denied command (`rm`) used to abort the whole run until `retries=3` was set.
-
-These gaps are what the skills in agents 2 and 3 are meant to close.
-
-## Grader
-
-`grader.py` (Typer CLI, no LLM) recomputes the correct answer from `data/sales_raw.csv` and checks 13 things in each agent's `out/` folder: CSV schema, dedup/cancelled, ISO dates, canonical regions, `UNKNOWN` products, USD amounts, report sections and totals.
-
-```bash
-uv run python grader.py grade agent_1_no_skill
+echo "OPENROUTER_API_KEY=..." > .env            # never committed
+uv run python -m agent_2_basic_skills.main       # run one agent
+uv run python grader.py grade agent_2_basic_skills
 uv run python grader.py grade-all
+uv run python bench.py run agent_3_advanced_skill --runs 2    # max 2 runs per call, output streamed live
+uv run python bench.py resume agent_3_advanced_skill --after 18   # one pair of runs
+uv run python bench.py show                      # table of every run in results/bench.jsonl
 ```
 
-## The task: monthly sales close (6 stages)
+- `grader.py` (Typer, no LLM) recomputes the correct answer from `data/` and checks 25 things in each agent's `workspace/out/`.
+- `bench.py` runs each agent in a fresh process, grades it, and saves outputs and logs under `results/` (ignored by git) with tokens, requests and tool calls.
+- Each agent's `workspace/` is wiped every time its module is imported, unless `RESUME=1`.
 
-Same prompt for every agent. Inputs in `data/`: `sales_raw.csv`, `fx_rates.csv` (monthly EUR to USD), `refunds_ledger.csv`, `targets.csv`. Outputs in `out/`: `clean.csv`, `exceptions.csv`, `anomalies.csv`, `review_queue.csv`, `monthly.csv`, `report.md` (with an executive summary).
+## Layout
 
-Stages: profile inputs, clean, reconcile refunds, anomalies and review queue, monthly revenue vs targets, report. Planted traps: a month without an FX rate, ledger/sales refund mismatches, a duplicate whose copies disagree on the amount, two outlier amounts, and eight conditional review rules.
-
-## Results so far
-
-| Round | Task | Agent 1 | Agent 2 | Finding |
-|---|---|---|---|---|
-| 1 | clean one CSV (13 checks) | 1/13 | 13/13 | Skills carry business knowledge the model cannot guess. |
-| 2 | 5 outputs, 23 checks | 1/23 | 23/23 (2 of 2 runs) | Knowledge skills alone were enough; the task was too easy for agent 3 to add anything. |
-
-Round 2 cost per agent-2 run: about 390k to 470k input tokens, 15k to 22k output tokens, 22 to 23 requests.
-
-## Round 3: what agent 3 is meant to show
-
-The task now has a sixth output (`review_queue.csv`, 8 rules), which makes the rule set long. Agent 2 keeps all rules in flat skills. Agent 3 has one skill whose `SKILL.md` is only the workflow, and the rules are split into `references/` that it loads per stage (progressive disclosure).
-
-- **Staged workflow:** it writes the 6-step plan with `write_plan`, runs one stage at a time and may not advance until `scripts/validate.py <stage>` passes.
-- **Validation gates:** the validators check schemas, allowed values and cross-file totals, and recompute the rules that can be derived from `clean.csv`. They do not read the grader and do not contain the EUR rates. They do act as a second opinion on the rules, which is part of what a skill with scripts offers.
-- **Same knowledge as agent 2:** the reference files were generated from agent 2's skills, so the rules are identical; only the process differs.
-- **Crash and resume:** the plan is stored in SQLite (`SqlitePlanStore`). `bench.py resume` stops a run after N model requests and starts a new process on the same workspace with a "continue" prompt. The new process sees the stored plan on its first request.
-
-Tests run without a model: validators pass on a perfect solution and flag planted errors, the grader scores that solution 25/25, and the plan survives a second process.
+```
+common.py                  model, workspace setup, runner with stats
+grader.py                  25-check CLI grader
+bench.py                   multi-run and crash/resume benchmark
+data/                      inputs + generators
+agent_1_no_skill/          baseline
+agent_2_basic_skills/      skills/{sales-cleaning-rules,monthly-close-policies,report-format}
+agent_3_advanced_skill/    skills/monthly-close/{SKILL.md,references/,scripts/validate.py}
+```
