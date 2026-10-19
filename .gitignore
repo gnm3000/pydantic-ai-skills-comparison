@@ -1,10 +1,26 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
+.ruff_cache/
+*.csv
+# Entorno virtual
+.venv/
 
-# Virtual environments
-.venv
+# Secretos (OPENROUTER_API_KEY); no subir nunca
+.env
+.env.*
+!.env.example
+
+# Salidas de las corridas de los agentes (se regeneran; data/sales_raw.csv SÍ se versiona)
+workspace/
+runs/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store

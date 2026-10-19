@@ -10,11 +10,6 @@ requires-python = ">=3.13"
 dependencies = [
     "pydantic-ai>=2.57.0",
     "pydantic-ai-harness[skills]>=0.57.0",
+    "python-dotenv",
+    "typer>=0.27.3",
 ]
-
-[project.scripts]
-pydantic-ai-learning-skills = "pydantic_ai_learning_skills:main"
-
-[build-system]
-requires = ["uv_build>=0.12.3,<0.13.0"]
-build-backend = "uv_build"
