@@ -177,9 +177,13 @@ def run_checks(ws: Path) -> list[tuple[str, bool]]:
     out = ws / "out"
     truth = expected_clean()
     rows = read_csv(out / "clean.csv")
-    got = {r["order_id"]: r for r in rows}
+    got = {r.get("order_id", ""): r for r in rows}
     report_file = out / "report.md"
     report = report_file.read_text() if report_file.exists() else ""
+
+    # Field checks look only at the rows the agent kept, so a missing or extra row is penalised once
+    # (by the exact-rows check) and not again by every field check.
+    shared = {k: v for k, v in truth.items() if k in got}
 
     by_region: dict[str, float] = defaultdict(float)
     for v in truth.values():
@@ -193,13 +197,13 @@ def run_checks(ws: Path) -> list[tuple[str, bool]]:
     review_rows = read_csv(out / "review_queue.csv")
     review = {(r.get("order_id", ""), r.get("reason", "")) for r in review_rows}
     monthly_rows = read_csv(out / "monthly.csv")
-    monthly = {(r["month"], r["region"]): r for r in monthly_rows}
+    monthly = {(r.get("month"), r.get("region")): r for r in monthly_rows}
     expected_m = expected_monthly()
 
     def monthly_ok() -> bool:
         return set(monthly) == set(expected_m) and all(
-            close(monthly[k]["revenue_usd"], rev) and close(monthly[k]["target_usd"], tgt)
-            and close(monthly[k]["variance_usd"], round(rev - tgt, 2))
+            close(monthly[k].get("revenue_usd"), rev) and close(monthly[k].get("target_usd"), tgt)
+            and close(monthly[k].get("variance_usd"), round(rev - tgt, 2))
             for k, (rev, tgt) in expected_m.items()
         )
 
@@ -218,10 +222,10 @@ def run_checks(ws: Path) -> list[tuple[str, bool]]:
     checks = [
         ("clean.csv has the expected columns", bool(rows) and list(rows[0]) == CLEAN_COLUMNS),
         ("no duplicates or cancelled orders (exact rows)", len(rows) == len(got) == len(truth) and set(got) == set(truth)),
-        ("correct ISO dates (DD/MM/YYYY read properly)", all(got.get(k, {}).get("date") == v["date"] for k, v in truth.items())),
-        ("canonical regions (NA/EMEA/APAC/LATAM)", all(got.get(k, {}).get("region") == v["region"] for k, v in truth.items())),
-        ("blank product -> UNKNOWN", all(got.get(k, {}).get("product") == v["product"] for k, v in truth.items())),
-        ("USD amounts (monthly EUR rate, refunds negative)", all(close(got.get(k, {}).get("amount_usd"), v["amount_usd"], 0.015) for k, v in truth.items())),
+        ("correct ISO dates (DD/MM/YYYY read properly)", bool(shared) and all(got[k].get("date") == v["date"] for k, v in shared.items())),
+        ("canonical regions (NA/EMEA/APAC/LATAM)", bool(shared) and all(got[k].get("region") == v["region"] for k, v in shared.items())),
+        ("blank product -> UNKNOWN", bool(shared) and all(got[k].get("product") == v["product"] for k, v in shared.items())),
+        ("USD amounts (monthly EUR rate, refunds negative)", bool(shared) and all(close(got[k].get("amount_usd"), v["amount_usd"], 0.015) for k, v in shared.items())),
         ("exceptions.csv lists exactly the refund mismatches", bool(exc_rows) and exceptions == expected_exceptions()),
         ("anomalies.csv lists exactly the outlier orders", bool(anom_rows) and anomalies == expected_anomalies()),
         ("review_queue.csv lists exactly the (order, reason) pairs", bool(review_rows) and review == expected_review_queue()),

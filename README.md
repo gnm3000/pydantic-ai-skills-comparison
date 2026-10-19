@@ -6,7 +6,7 @@ Stack: `pydantic-ai` 2.57, `pydantic-ai-harness` 0.57 (`Skills`, `Planning`, `Fi
 
 ## TL;DR
 
-- **Knowledge skills are the big win.** Same model, same tools, same prompt: 1/23 without skills, 23/23 and 25/25 with them. The model is not worse at analysis; it cannot guess company conventions (EUR rate by month, what to do with cancelled orders, column names, report sections).
+- **Knowledge skills are the big win.** Same model, same tools, same prompt: 3/25 and 4/25 without skills, 25/25 in all 5 runs with them. The model is not worse at analysis; it cannot guess company conventions (EUR rate by month, what to do with cancelled orders, column names, report sections).
 - **A process skill adds recoverability and an audit trail, not a higher score.** The agent with one workflow skill plus `Planning` follows a 6-stage plan, loads one reference per stage and passes a validation gate before moving on. It scored the same (25/25) at a similar cost as the agent with flat knowledge skills.
 - **Staged work survives a crash.** Cut mid-pipeline, the process-skill agent resumed in a new process from its own plan and files, skipped the finished stages and completed 25/25 using about half the tokens of a fresh run. The single-script agent has no partial progress to resume.
 - **Choose by task.** Short, repeatable task: knowledge skills are enough and simplest. Long or costly task, or one you must audit: add a process skill on top of the knowledge. See [When to choose each](#when-to-choose-each).
@@ -39,12 +39,15 @@ The task grew over three rounds because every version was solved perfectly by th
 |---|---|---|---|---|
 | 1 | clean one CSV, 13 checks | 1/13 | 13/13 | not built |
 | 2 | 5 output files, 23 checks | 1/23 | 23/23 (2 of 2 runs) | not built |
-| 3 | 6 output files, 25 checks | not re-run | 25/25 (3 of 3 runs) | 25/25 (2 of 2 runs) |
+| 3 | 6 output files, 25 checks | 3/25 and 4/25 (2 runs) | 25/25 (3 of 3 runs) | 25/25 (2 of 2 runs) |
 
 ### Round 3 cost (`bench.py run`; tokens are model input and output)
 
 | Run | Score | Input tokens | Output tokens | Requests | Tool calls | Seconds |
 |---|---|---|---|---|---|---|
+| Agent 1, run A | 3/25 | 1133k | 29k | 37 | 51 | 90 |
+| Agent 1, run B | 4/25 | 464k | 24k | 19 | 26 | 74 |
+| **Agent 1, average** | **3.5/25** | **799k** | **26k** | **28** | **38** | **82** |
 | Agent 2, run A | 25/25 | 864k | 27k | 32 | 46 | 104 |
 | Agent 2, run B | 25/25 | 627k | 24k | 25 | 40 | 75 |
 | Agent 2, run C | 25/25 | 257k | 14k | 15 | 23 | 48 |
@@ -53,11 +56,11 @@ The task grew over three rounds because every version was solved perfectly by th
 | Agent 3, run B | 25/25 | 601k | 17k | 30 | 42 | 62 |
 | **Agent 3, average** | **25/25** | **528k** | **15k** | **28** | **40** | **66** |
 
-The difference between agents 2 and 3 is within noise: agent 2 alone varies 3.4x in input tokens between runs, and each agent has only 2 to 3 runs.
+Without skills the agent is the most expensive and the most variable (464k to 1.13M input tokens), and it scores far lower. The difference between agents 2 and 3 is within noise: agent 2 alone varies 3.4x in input tokens between runs, and each agent has only 2 to 3 runs.
 
 ### What agent 1 does without skills
 
-It analyses well and finds most of the same problems (missing April rate, refund mismatches, outliers), but applies its own conventions: drops a conflicting duplicate entirely, imputes the missing rate by interpolation instead of using the previous month, adds `currency` / `fx_rate` columns, invents its own report sections, and reports a different net revenue (38,781.11 vs the expected 36,417.82). The grader measures conformity to the company's rules, not intelligence.
+It does real analysis. It parses both date formats (in run A it checks its reading against the refund ledger), canonicalises the regions, converts EUR with the monthly rate, and flags the same outliers and refund breaks as the other agents (in run B its `anomalies.csv` matches the expected set exactly). What it cannot know is the company's conventions, so it applies its own: it quarantines the conflicting duplicate and the April EUR orders that have no rate instead of using the previous month's rate, keeps cancelled orders in `clean.csv`, adds columns (`currency`, `fx_rate`, `net_usd`...), writes its own report sections and `monthly.csv` layout, and ends with a different net revenue (36,697.54 and 35,773.77 against the expected 36,417.82). Run A even offers to re-run with an interpolated April rate. The grader measures conformity to the company's rules, not intelligence: the score gap is the cost of conventions that exist only in the skills.
 
 ### What agent 3 does with its skill
 
@@ -119,7 +122,7 @@ uv run python bench.py resume agent_3_advanced_skill --after 18   # one pair of 
 uv run python bench.py show                      # table of every run in results/bench.jsonl
 ```
 
-- `grader.py` (Typer, no LLM) recomputes the correct answer from `data/` and checks 25 things in each agent's `workspace/out/`.
+- `grader.py` (Typer, no LLM) recomputes the correct answer from `data/` and checks 25 things in each agent's `workspace/out/`. The field checks (dates, regions, products, amounts) look only at the rows the agent kept, so a missing or extra row is penalised once, by the exact-rows check.
 - `bench.py` runs each agent in a fresh process, grades it, and saves outputs and logs under `results/` (ignored by git) with tokens, requests and tool calls.
 - Each agent's `workspace/` is wiped every time its module is imported, unless `RESUME=1`.
 
